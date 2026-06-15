@@ -1,0 +1,189 @@
+{% extends 'core/base.html' %}
+
+{% block title %}MorphoAnalyzer | MorphoWrite{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto my-8 px-4" x-data="{ 
+    word: '', 
+    loading: false, 
+    result: null,
+    errorMsg: '',
+    async analyzeWord() {
+        if (!this.word.trim()) return;
+        this.loading = true;
+        this.result = null;
+        this.errorMsg = '';
+
+        let attempts = 0;
+        const maxAttempts = 2;
+
+        while (attempts < maxAttempts) {
+            try {
+                const response = await fetch('/morpho-analyzer/api/analyze/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ word: this.word })
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    if (data.error && (data.error.includes('429') || data.error.toLowerCase().includes('quota'))) {
+                        throw new Error(`The linguistic engine is taking a quick breather! We've run a lot of words this minute. Please wait about 10 seconds and click Analyze again.`);
+                    }
+                    throw new Error(data.error || 'Server busy');
+                }
+                
+                this.result = data;
+                
+                this.loading = false; // 🎯 Success! Turn off loading spinner here
+                return; // Exit the function completely
+                
+            } catch (err) {
+             this.errorMsg = err.message;
+                attempts++;
+                
+                if (attempts >= maxAttempts) {
+                    // 🎯 Out of chances. Turn off loading and show the final student message.
+                    this.loading = false;
+                    this.errorMsg = 'The linguistic engine is a bit busy right now. Please wait a moment and click Analyze again!';
+                } else {
+                    // 🎯 Wait 1.5 seconds (1500ms) before the while loop tries again
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+            }
+        }
+    }
+}">
+    <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8">
+        <div class="mb-8">
+            <h1 class="text-3xl font-extrabold text-slate-950 tracking-tight mb-2">Morphology Analyzer</h1>
+            <p class="text-slate-600">Enter an English word to dissect its morphemes, roots, and linguistic history.</p>
+        </div>
+
+        <form @submit.prevent.debounce.500ms="analyzeWord()" class="flex gap-3 mb-8">
+            <div class="relative flex-1">
+                <input 
+                    type="text" 
+                    x-model="word"
+                    placeholder="Enter a word (e.g., superfluous, onomatopoeia)..." 
+                    class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition outline-none text-slate-900 placeholder-slate-400 font-medium"
+                />
+            </div>
+            <button 
+                type="submit" 
+                class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-semibold rounded-xl shadow-sm transition flex items-center gap-2"
+                :disabled="loading"
+            >
+                <span x-show="!loading">Analyze</span>
+                <span x-show="loading" class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></span>
+            </button>
+        </form>
+        <p x-show="errorMsg" x-text="errorMsg" class="text-red-600 text-sm mt-2"></p>
+
+        <div x-show="loading" class="py-12 flex flex-col items-center justify-center space-y-3">
+            <div class="animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
+            <p class="text-sm font-medium text-slate-500">Dissecting morphology via Gemini API...</p>
+        </div>
+
+        <div x-show="result" x-transition class="space-y-6">
+            <div class="border-t border-slate-100 pt-6">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Structural Breakdown</h3>
+                
+                <div class="flex flex-wrap gap-3">
+                    <template x-for="morpheme in result?.morphemes" :key="morpheme.text">
+                        <div class="flex flex-col bg-slate-50 border border-slate-200 rounded-xl p-4 min-w-[120px]">
+                            <span class="text-[10px] font-bold tracking-wide uppercase text-indigo-600 mb-1" x-text="morpheme.type"></span>
+                            <span class="text-lg font-bold text-slate-900 font-mono mb-1" x-text="morpheme.text"></span>
+                            <span class="text-xs text-slate-500" x-text="morpheme.meaning"></span>
+                            <div class="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between">
+                                <span class="text-[10px] uppercase font-bold tracking-wider text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                                    Role: <span x-text="morpheme.part_of_speech" class="font-semibold text-gray-700 normal-case"></span>
+                                </span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="bg-indigo-50/50 border border-indigo-100/80 rounded-xl p-4">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-indigo-700 mb-1">Dictionary Definition</h4>
+                <p class="text-slate-700 text-sm leading-relaxed" x-text="result?.definition"></p>
+            </div>
+
+            <div 
+                x-show="result?.history_timeline && result?.history_timeline.length > 0" 
+                x-transition
+                class="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm mt-6"
+            >
+                <div class="flex items-center space-x-2 text-indigo-800 font-bold mb-6 tracking-wide text-xs uppercase">
+                    <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span>Word Evolution Timeline</span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:flex md:items-start md:gap-4 relative">
+                    
+                    <template x-for="(period, index) in result?.history_timeline" :key="index">
+                        <div class="flex-1 relative pb-6 md:pb-0">
+                            
+                            <div 
+                                x-show="index < (result?.history_timeline?.length - 1)" 
+                                class="hidden md:block absolute left-[12px] right-0 top-1.5 h-0.5 bg-indigo-100 -z-0"
+                            ></div>
+                            
+                            <div class="relative z-10 flex items-center mb-3">
+                                <div class="w-3 h-3 rounded-full bg-indigo-600 border-2 border-white ring-4 ring-indigo-50"></div>
+                            </div>
+                            
+                            <span class="inline-block px-2 py-0.5 text-xs font-bold bg-indigo-50 text-indigo-700 rounded-md uppercase tracking-wide" x-text="period.time_period"></span>
+                            
+                            <p class="text-slate-700 text-xs leading-relaxed mt-2 pr-2" x-text="period.description"></p>
+                            
+                        </div>
+                    </template>
+                    
+                </div>
+            </div>
+
+            <!-- 📚 Pedagogical Content: Did You Know? & Real-World Power -->
+            <template x-if="result">
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <!-- 🧠 The "Velcro Effect" Story Card -->
+                    <div class="bg-amber-50 border border-amber-200 rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center space-x-2 text-amber-800 font-bold mb-3 tracking-wide text-xs uppercase">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+                            <span>Did You Know?</span>
+                        </div>
+                        <p x-text="result?.did_you_know" class="text-gray-700 text-sm leading-relaxed font-medium"></p>
+                    </div>
+                    
+
+                    <!-- ⚡ Real-World Power Card -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-xl p-6 shadow-sm">
+                        <div class="flex items-center space-x-2 text-blue-800 font-bold mb-3 tracking-wide text-xs uppercase">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            <span>Real-World Power</span>
+                        </div>
+                        <p x-text="result?.real_world_power" class="text-gray-700 text-sm leading-relaxed font-medium"></p>
+                    </div>
+
+                </div>
+            </template>
+
+            <!-- 🪄 Extra Credit: Auto-Correction Notification Badge -->
+            <template x-if="result && result.spelling_corrected">
+                <div class="mt-4 text-center">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        ✨ Auto-corrected from "<span x-text="result.input_word"></span>" to "<span x-text="result.word" class="font-bold"></span>"
+                    </span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+{% endblock %}
