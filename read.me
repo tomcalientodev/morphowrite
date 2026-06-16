@@ -9,15 +9,20 @@ pip install -r requirements.txt
 
 ## Run locally
 
-./run_dev.sh or make dev
+make dev
+
+make stop
 
 App:
 http://localhost:8080
 
-## Stop
+Add a .env file in project root specifying YOUR:
+SECRET_KEY=
+DEBUG=True
+GEMINI_API_KEY=
+DJANGO_SETTINGS_MODULE=config.settings.local 
+ALLOWED_HOSTS=127.0.0.1,localhost,
 
-./stop_dev.sh or make stop
 
 ## Static files
 Uses Tailwind CDN for development, no config.
-DJANGO_SETTINGS_MODULE=config.settings.production python manage.py collectstatic
